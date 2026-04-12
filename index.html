@@ -1,294 +1,142 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Bus Stop Accessibility Analysis</title>
-  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
-
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orange County Bus Accessibility</title>
   <style>
-    body { margin:0; padding:0; }
-    #map { position:absolute; top:0; bottom:0; width:100%; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f4f6f9;
+      color: #222;
+    }
 
-    #menu {
-      position: absolute;
-      top: 10px;
-      left: 10px;
+    header {
+      background: #1300a3;
+      color: white;
+      padding: 20px 40px;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    header p {
+      margin: 5px 0 0;
+      opacity: 0.85;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .card {
       background: white;
-      padding: 10px;
-      z-index: 2;
-      border-radius: 5px;
-      font-family: sans-serif;
-      font-size: 14px;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
     }
 
-    #legend {
-      position: absolute;
-      bottom: 30px;
-      left: 10px;
-      background: white;
-      padding: 10px;
-      border-radius: 5px;
-      font-family: sans-serif;
-      font-size: 13px;
-      z-index: 2;
+    .full {
+      grid-column: span 2;
     }
 
-    .legend-item {
-      display: flex;
-      align-items: center;
-      margin-bottom: 4px;
+    iframe {
+      width: 100%;
+      height: 85vh;
+      border: none;
+      border-radius: 12px;
     }
 
-    .legend-color {
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      margin-right: 6px;
-      border: 1px solid #333;
+    h2 {
+      margin-top: 0;
+      color: #1f3b57;
+    }
+
+    ul {
+      padding-left: 20px;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 15px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    @media (max-width: 900px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+
+      .full {
+        grid-column: span 1;
+      }
     }
   </style>
 </head>
-
 <body>
 
-<div id="menu">
-  <strong>Toggle Layers:</strong><br>
-  <input type="checkbox" id="toggle-routes" checked> Bus Routes<br>
-  <input type="checkbox" id="toggle-buffers" checked> Walking Buffers<br>
-  <input type="checkbox" id="toggle-stops" checked> Bus Stops<br>
+<header>
+  <h1>Orange County Bus Accessibility</h1>
+</header>
+
+<div class="container">
+
+  <div class="card full">
+    <h2>Interactive Map Dashboard</h2>
+    <p>Use the map below to explore bus routes, stops, and accessibility patterns across Orange County.</p>
+    <iframe src="https://univredlands.maps.arcgis.com/apps/dashboards/ab087dc8a5014997bdacb14392222e64"></iframe>
+  </div>
+
+  <div class="card">
+    <h2>Project Description</h2>
+    <p>
+      This project analyzes bus stop distribution and transit accessibility across Orange County, California.
+      Using GIS spatial analysis, the goal is to evaluate how effectively public transit infrastructure serves communities and identifies gaps in coverage.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Project Goals</h2>
+    <ul>
+      <li>Map bus stop and route accessibility across Orange County</li>
+      <li>Analyze spatial distribution of transit services</li>
+      <li>Identify underserved areas with limited transit access</li>
+      <li>Build an interactive GIS web dashboard for exploration</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Functionality</h2>
+    <ul>
+      <li>Interactive filtering by bus route</li>
+      <li>Dynamic indicators for bus stop counts per route</li>
+      <li>Clickable map features with route details</li>
+      <li>Embedded ArcGIS Dashboard visualization</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Results & Findings</h2>
+    <p>
+      The analysis reveals spatial differences in transit coverage across Orange County, showing that some routes have
+      higher concentrations of bus stops while others serve more dispersed or underserved regions. These patterns highlight
+      opportunities for improving transit equity and accessibility planning.
+    </p>
+  </div>
+
 </div>
 
-<div id="map"></div>
-<div id="legend"><strong>Bus Stop Accessibility</strong></div>
-
-<script>
-mapboxgl.accessToken = 'pk.eyJ1Ijoid3lhdHRicmVuZW1hbiIsImEiOiJjbWxjc2Uxc3IxM3FlM2VxMzlpajVtaDhzIn0.QEwP5Qmy66LyhPD-heJWug';
-
-Promise.all([
-  fetch('Boundary.geojson').then(r=>r.json()),
-  fetch('bus_stops.geojson').then(r=>r.json()),
-  fetch('Bus_Routes.geojson').then(r=>r.json())
-]).then(([boundary, busStops, busRoutes]) => {
-
-  // ===============================
-  // 🔥 SPATIAL JOIN (KEY FIX)
-  // ===============================
-  busStops.features.forEach(f => {
-    f.properties.ROUTES = [];
-  });
-
-  busStops.features.forEach(stop => {
-    const stopPoint = turf.point(stop.geometry.coordinates);
-
-    busRoutes.features.forEach(route => {
-      const snapped = turf.nearestPointOnLine(route, stopPoint, { units: 'kilometers' });
-      const dist = snapped.properties.dist;
-
-      // 50 meters threshold
-      if (dist <= 0.05) {
-        const routeName = route.properties.RTE_NO || "Unknown";
-
-        if (!stop.properties.ROUTES.includes(routeName)) {
-          stop.properties.ROUTES.push(routeName);
-        }
-      }
-    });
-  });
-
-  // Keep for styling ONLY
-  busStops.features.forEach(f => {
-    f.properties.NUM_ROUTES = f.properties.ROUTES.length;
-  });
-
-  // ===============================
-  // Map Bounds
-  // ===============================
-  const bounds = new mapboxgl.LngLatBounds();
-  boundary.features.forEach(f=>{
-    if(f.geometry.type==='Polygon') f.geometry.coordinates[0].forEach(c=>bounds.extend(c));
-    else if(f.geometry.type==='MultiPolygon') f.geometry.coordinates.forEach(p=>p[0].forEach(c=>bounds.extend(c)));
-  });
-
-  const map = new mapboxgl.Map({
-    container: 'map',
-    style: 'mapbox://styles/mapbox/streets-v11',
-    bounds: bounds,
-    fitBoundsOptions: { padding: 20 }
-  });
-
-  map.addControl(new mapboxgl.NavigationControl());
-
-  map.on('load', () => {
-
-    // ===============================
-    // Boundary
-    // ===============================
-    map.addSource('boundary', { type:'geojson', data: boundary });
-    map.addLayer({
-      id:'boundary-fill',
-      type:'fill',
-      source:'boundary',
-      paint:{'fill-color':'#000','fill-opacity':0.08}
-    });
-    map.addLayer({
-      id:'boundary-outline',
-      type:'line',
-      source:'boundary',
-      paint:{'line-color':'#333','line-width':1.5}
-    });
-
-    // ===============================
-    // Bus Routes
-    // ===============================
-    map.addSource('bus-routes', { type:'geojson', data: busRoutes });
-    map.addLayer({
-      id:'bus-routes-layer',
-      type:'line',
-      source:'bus-routes',
-      paint:{
-        'line-color':'#ff6600',
-        'line-width':2,
-        'line-opacity':0.8
-      }
-    });
-
-    // ✅ FIXED ROUTE POPUP
-    map.on('click','bus-routes-layer', e => {
-      const routeName = e.features[0].properties.RTE_NO || "Unknown";
-
-      new mapboxgl.Popup()
-        .setLngLat(e.lngLat)
-        .setHTML(`<strong>Route: ${routeName}</strong>`)
-        .addTo(map);
-    });
-
-    // ===============================
-    // Buffers (400m)
-    // ===============================
-    const buffer = turf.buffer(busStops, 0.4, { units: 'kilometers' });
-
-    map.addSource('bus-buffers', { type:'geojson', data: buffer });
-    map.addLayer({
-      id:'bus-buffers-layer',
-      type:'fill',
-      source:'bus-buffers',
-      paint:{
-        'fill-color':'#007cbf',
-        'fill-opacity':0.1
-      }
-    });
-
-    // ===============================
-    // Bus Stops
-    // ===============================
-    map.addSource('bus-stops', { type:'geojson', data: busStops });
-    map.addLayer({
-      id:'bus-stops-layer',
-      type:'circle',
-      source:'bus-stops',
-      paint:{
-        'circle-radius':[
-          'interpolate',['linear'],['get','NUM_ROUTES'],
-          0,4, 1,6, 3,10, 5,15, 8,20
-        ],
-        'circle-color':[
-          'interpolate',['linear'],['get','NUM_ROUTES'],
-          0,'#ffcccc',
-          1,'#ff7f7f',
-          3,'#ffb74d',
-          5,'#81c784',
-          8,'#388e3c'
-        ],
-        'circle-stroke-color':'#fff',
-        'circle-stroke-width':1
-      }
-    });
-
-    // ✅ CLEAN POPUP WITH ROUTES
-    map.on('click','bus-stops-layer', e => {
-      const props = e.features[0].properties;
-
-      const routeList = props.ROUTES && props.ROUTES.length
-        ? props.ROUTES.sort((a,b)=>a-b).join(', ')
-        : 'No routes nearby';
-
-      new mapboxgl.Popup()
-        .setLngLat(e.features[0].geometry.coordinates)
-        .setHTML(`
-          <div style="font-size:14px; line-height:1.4">
-            <strong>${props.ON_STREET} & ${props.AT_STREET}</strong><br><br>
-
-            <b>Stop ID:</b> ${props.OCTA_ID}<br>
-            <b>Direction:</b> ${props.DIR}<br>
-            <b>Routes:</b> ${routeList}<br><br>
-
-            <b>Walking Buffer:</b> 400 meters (5 minute walk)
-          </div>
-        `)
-        .addTo(map);
-    });
-
-    // Hover cursor
-    map.on('mouseenter', 'bus-stops-layer', () => {
-      map.getCanvas().style.cursor = 'pointer';
-    });
-    map.on('mouseleave', 'bus-stops-layer', () => {
-      map.getCanvas().style.cursor = '';
-    });
-
-    // ===============================
-    // Toggles
-    // ===============================
-    document.getElementById('toggle-routes').addEventListener('change', e=>{
-      map.setLayoutProperty('bus-routes-layer','visibility', e.target.checked?'visible':'none');
-    });
-
-    document.getElementById('toggle-buffers').addEventListener('change', e=>{
-      map.setLayoutProperty('bus-buffers-layer','visibility', e.target.checked?'visible':'none');
-    });
-
-    document.getElementById('toggle-stops').addEventListener('change', e=>{
-      map.setLayoutProperty('bus-stops-layer','visibility', e.target.checked?'visible':'none');
-    });
-
-    // ===============================
-    // Legend
-    // ===============================
-    const legendEl = document.getElementById('legend');
-    legendEl.innerHTML = '<strong>Bus Stop Accessibility</strong><br>';
-
-    const labels = [
-      'No service',
-      'Low access',
-      'Moderate access',
-      'High access',
-      'Very high access'
-    ];
-
-    const colors = ['#ffcccc','#ff7f7f','#ffb74d','#81c784','#388e3c'];
-    const sizes = [4,6,10,15,20];
-
-    labels.forEach((label,i)=>{
-      const div = document.createElement('div');
-      div.className='legend-item';
-      div.innerHTML = `
-        <div class="legend-color"
-          style="background:${colors[i]};
-                 width:${sizes[i]}px;
-                 height:${sizes[i]}px;">
-        </div>
-        ${label}
-      `;
-      legendEl.appendChild(div);
-    });
-
-  });
-});
-</script>
+<div class="footer">
+  GIS 661 Final Project by Wyatt Breneman
+</div>
 
 </body>
 </html>
